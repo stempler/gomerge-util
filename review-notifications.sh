@@ -79,19 +79,42 @@ for repo in $filtered_repos; do
   # Iterate over notifications and mark as done if related to merged pull requests
   for notification in $(echo "$repo_notifications" | jq -r '.id'); do
     pr_url=$(echo "$repo_notifications" | jq -r --arg id "$notification" 'select(.id == $id) | .subject.url')
-    pr_state=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$pr_url" | jq -r '.state')
+    pr_data=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$pr_url")
+    pr_state=$(echo "$pr_data" | jq -r '.state')
 
     # Derive HTML URL for the PR from the API URL
-    pr_html_url=$(echo "$pr_url" | sed 's|api\.|www.|; s|repos/||; s|/pulls/|/pull/|')
+    pr_html_url=$(echo "$pr_url" | sed 's|api\\.|www.|; s|repos/||; s|/pulls/|/pull/|')
 
     echo "PR state for $pr_html_url: $pr_state"
 
-    if [ "$pr_state" == "closed" ]; then
-      curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/notifications/threads/$notification"
-      echo "Marked notification for PR $pr_html_url as done"
+    proceed_marking=false
+    if [ -z "$LABELS" ]; then
+      # LABELS not set, always proceed
+      proceed_marking=true
     else
-      curl -s -X PATCH -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/notifications/threads/$notification" > /dev/null
-      echo "Marked notification for PR $pr_html_url as read"
+      # LABELS is set, check for label match
+      pr_labels=$(echo "$pr_data" | jq -r '[.labels[].name] | join(",")')
+      IFS=',' read -ra label_arr <<< "$LABELS"
+      for label in "${label_arr[@]}"; do
+        if [[ ",$pr_labels," == *",$label,"* ]]; then
+          proceed_marking=true
+          echo "Label match found: $label in $pr_labels"
+          break
+        fi
+      done
+      if [ "$proceed_marking" = false ]; then
+        echo "No label match for PR $pr_html_url, skipping notification."
+      fi
+    fi
+
+    if [ "$proceed_marking" = true ]; then
+      if [ "$pr_state" == "closed" ]; then
+        curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/notifications/threads/$notification"
+        echo "Marked notification for PR $pr_html_url as done"
+      else
+        curl -s -X PATCH -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/notifications/threads/$notification" > /dev/null
+        echo "Marked notification for PR $pr_html_url as read"
+      fi
     fi
   done
 done
