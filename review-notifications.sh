@@ -75,7 +75,7 @@ for repo in $filtered_repos; do
   fi
 
   # Prompt user to confirm processing notifications for this repo (default: yes, 10s timeout, single keypress)
-  echo -n "Do you want to process notifications for $repo? (continues automatically after 10s) [Y/n]: "
+  echo -n "Do you want to process notifications for $repo? (continues automatically after 10s) [Y/n/d=done]: "
   read -r -n 1 -t 10 process_choice
   if [ $? -gt 128 ]; then
     # read timed out
@@ -84,9 +84,14 @@ for repo in $filtered_repos; do
   fi
   process_choice=${process_choice:-Y}
   echo
-  if [[ ! "$process_choice" =~ ^[Yy]$ ]]; then
+  if [[ "$process_choice" =~ ^[Nn]$ ]]; then
     echo "Skipping notification processing for $repo."
     continue
+  fi
+  mark_all_done=false
+  if [[ "$process_choice" =~ ^[Dd]$ ]]; then
+    mark_all_done=true
+    echo "All matching notifications for $repo will be marked as done."
   fi
 
   # Fetch notifications for the repository
@@ -124,7 +129,7 @@ for repo in $filtered_repos; do
     fi
 
     if [ "$proceed_marking" = true ]; then
-      if [ "$pr_state" == "closed" ]; then
+      if [ "$mark_all_done" = true ] || [ "$pr_state" == "closed" ]; then
         curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/notifications/threads/$notification"
         echo "Marked notification for PR $pr_html_url as done"
       else
