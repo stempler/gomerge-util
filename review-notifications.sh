@@ -66,8 +66,12 @@ for repo in $filtered_repos; do
   echo "$middle_border"
   echo "$bottom_border"
 
-  # Run review for repo
-  ./review-repo.sh "$repo"
+
+  # Run review for repo; exit if it fails
+  if ! ./review-repo.sh "$repo"; then
+    echo "Error: review-repo.sh failed for $repo. Aborting notification processing."
+    exit 1
+  fi
 
   # Fetch notifications for the repository
   repo_notifications=$(echo "$notifications" | jq -r --arg repo "$repo" '.[] | select(.repository.full_name == $repo)')
