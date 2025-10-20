@@ -67,10 +67,26 @@ for repo in $filtered_repos; do
   echo "$bottom_border"
 
 
+
   # Run review for repo; exit if it fails
   if ! ./review-repo.sh "$repo"; then
     echo "Error: review-repo.sh failed for $repo. Aborting notification processing."
     exit 1
+  fi
+
+  # Prompt user to confirm processing notifications for this repo (default: yes, 10s timeout, single keypress)
+  echo -n "Do you want to process notifications for $repo? (continues automatically after 10s) [Y/n]: "
+  read -r -n 1 -t 10 process_choice
+  if [ $? -gt 128 ]; then
+    # read timed out
+    process_choice="Y"
+    echo
+  fi
+  process_choice=${process_choice:-Y}
+  echo
+  if [[ ! "$process_choice" =~ ^[Yy]$ ]]; then
+    echo "Skipping notification processing for $repo."
+    continue
   fi
 
   # Fetch notifications for the repository
